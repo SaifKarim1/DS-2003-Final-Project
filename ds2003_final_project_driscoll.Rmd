@@ -1,0 +1,99 @@
+---
+title: "ds2003_final_project_driscoll"
+author: "fpd4fv"
+date: '2022-12-01'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(forcats)
+
+library(ggplot2)
+library(shiny)
+
+
+```
+
+
+Islamic education	9	Fiqh, Fiqh Fatwa, Usuluddin, Islamic education, Pendidikan Islam, irkhs, KIRKHS
+
+Comp Science	17	BCS, IT, CTS, mathematics
+
+Law	3	laws, law
+
+Engineering		engin, engine, Engineering, ENM, KOE, KOP
+
+Pyschology		psychology (3)
+
+Business	2	Accounting, Banking Studies, BIT (10), Business Administration, Communication, econs, KENMS
+
+Medicine		Biomedical science, Biotechnology, CTS, marine science, radiography, diploma nursing, nursing, MHSC
+
+liberal arts		ALA, BENL (3), DIPLOMA TESL, Human Resources, human sciences, TAASL, malcom
+
+
+```{r}
+#reading in data, cleaning, and turning columns into factors
+
+mhealth_data <- read.csv('~/Desktop/DS_2003_working_version/assignments/final project/Student_Mental_health.csv')
+
+str(mhealth_data)
+
+
+### collapsing factors
+
+#making everything in What.is.your.course lowercase to make it easier to collapse
+mhealth_data <- mutate_all(mhealth_data, .funs=tolower)
+View(mhealth_data)
+
+#removing leading and trailing whitespace to prevent collapsing errors
+mhealth_data$What.is.your.course. <- trimws(mhealth_data$What.is.your.course., which = c("both"))
+
+#creating duplicate study column that will be collapsed into study categories
+mhealth_data$study_category <- mhealth_data$What.is.your.course.
+
+mhealth_data$study_category <- as.factor(mhealth_data$study_category)
+summary(mhealth_data$study_category)
+
+
+mhealth_data$study_category <- fct_collapse(mhealth_data$study_category,
+  Islamic_education = c("fiqh", "fiqh fatwa", "usuluddin", "islamic education",
+                        "pendidikan islam", "irkhs", "kirkhs"),
+  comp_science = c("bcs", "it", "cts", "mathemathics"),
+  Law	= c("laws", "law"),
+  engineering = c("engin", "engine", "engineering", "enm", "koe", "kop"),
+  psychology = c("psychology"),
+  business = c("accounting", "banking studies", "bit", "business administration",
+               "communication", "econs", "kenms"),
+  medicine = c("biomedical science", "biotechnology", "cts", "marine science",
+               "radiography", "diploma nursing", "nursing", "mhsc"),
+  liberal_arts = c("ala", "benl","diploma tesl", "human resources", 
+                   "human sciences", "taasl","malcom")
+)
+
+
+summary(mhealth_data$study_category)
+#study categories have been collapsed into 8 factor levels
+
+
+#making other columns factors as needed
+to_factor_cols <- c("Choose.your.gender","Your.current.year.of.Study",
+                    "What.is.your.CGPA.",
+                    "Marital.status","Do.you.have.Depression.","Do.you.have.Anxiety.","Do.you.have.Panic.attack.","Did.you.seek.any.specialist.for.a.treatment.")
+mhealth_data[to_factor_cols] <- lapply(mhealth_data[to_factor_cols], factor)
+
+#making age an integer
+mhealth_data$Age <- as.numeric(mhealth_data$Age)
+
+
+str(mhealth_data)
+
+
+
+```
