@@ -1,0 +1,315 @@
+---
+title: "ds2003_final_project_driscoll_2"
+author: "fpd4fv"
+date: '2022-12-01'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(forcats)
+
+library(ggplot2)
+library(shiny)
+
+library(tidyverse)
+
+
+```
+
+
+Islamic education	9	Fiqh, Fiqh Fatwa, Usuluddin, Islamic education, Pendidikan Islam, irkhs, KIRKHS
+
+Comp Science	17	BCS, IT, CTS, mathematics
+
+Law	3	laws, law
+
+Engineering		engin, engine, Engineering, ENM, KOE, KOP
+
+Pyschology		psychology (3)
+
+Business	2	Accounting, Banking Studies, BIT (10), Business Administration, Communication, econs, KENMS
+
+Medicine		Biomedical science, Biotechnology, CTS, marine science, radiography, diploma nursing, nursing, MHSC
+
+liberal arts		ALA, BENL (3), DIPLOMA TESL, Human Resources, human sciences, TAASL, malcom
+
+
+```{r}
+#reading in data, cleaning, and turning columns into factors
+
+mhealth_data <- read.csv('~/Desktop/DS_2003_working_version/assignments/final project/Student_Mental_health.csv')
+
+#str(mhealth_data)
+
+
+### collapsing factors
+
+#making everything in What.is.your.course lowercase to make it easier to collapse
+mhealth_data <- mutate_all(mhealth_data, .funs=tolower)
+#View(mhealth_data)
+
+#removing leading and trailing whitespace to prevent collapsing errors
+mhealth_data$What.is.your.course. <- trimws(mhealth_data$What.is.your.course., which = c("both"))
+
+#creating duplicate study column that will be collapsed into study categories
+mhealth_data$study_category <- mhealth_data$What.is.your.course.
+
+mhealth_data$study_category <- as.factor(mhealth_data$study_category)
+#summary(mhealth_data$study_category)
+
+
+mhealth_data$study_category <- fct_collapse(mhealth_data$study_category,
+  Islamic_education = c("fiqh", "fiqh fatwa", "usuluddin", "islamic education",
+                        "pendidikan islam", "irkhs", "kirkhs"),
+  comp_science = c("bcs", "it", "cts", "mathemathics"),
+  Law	= c("laws", "law"),
+  engineering = c("engin", "engine", "engineering", "enm", "koe", "kop"),
+  psychology = c("psychology"),
+  business = c("accounting", "banking studies", "bit", "business administration",
+               "communication", "econs", "kenms"),
+  medicine = c("biomedical science", "biotechnology", "cts", "marine science",
+               "radiography", "diploma nursing", "nursing", "mhsc"),
+  liberal_arts = c("ala", "benl","diploma tesl", "human resources", 
+                   "human sciences", "taasl","malcom")
+)
+
+
+#summary(mhealth_data$study_category)
+#study categories have been collapsed into 8 factor levels
+
+
+#making other columns factors as needed
+to_factor_cols <- c("Choose.your.gender","Your.current.year.of.Study",
+                    "What.is.your.CGPA.",
+                    "Marital.status","Do.you.have.Depression.","Do.you.have.Anxiety.","Do.you.have.Panic.attack.","Did.you.seek.any.specialist.for.a.treatment.")
+mhealth_data[to_factor_cols] <- lapply(mhealth_data[to_factor_cols], factor)
+
+#making age an integer
+mhealth_data$Age <- as.numeric(mhealth_data$Age)
+
+
+str(mhealth_data)
+
+```
+
+
+#Preparing data into a concise df for plotting
+```{r}
+
+
+#prepare separate set of three columns that store do you have x mental health issue as a numeric
+mhealth_data$depression_number <- as.numeric(mhealth_data$Do.you.have.Depression.) -1
+mhealth_data$anxiety_number <- as.numeric(mhealth_data$Do.you.have.Anxiety.) - 1
+mhealth_data$panic_number <- as.numeric(mhealth_data$Do.you.have.Panic.attack.) -1
+
+
+#making an aggregate df that has the prevalence rate of each mental ailment for each study group for each year of study. This will also have the prevalence rate of each mental ailment for each study group for all years to show a cumaltive mean for each study_group
+aggregate_mhealth_years <- aggregate(
+  cbind(depression_number,anxiety_number, panic_number)
+  ~ Your.current.year.of.Study + study_category,
+  data = mhealth_data,
+  FUN = mean,
+  na.rm = TRUE)
+
+aggregate_mhealth_years
+#view(aggregate_mhealth_years)
+#str(aggregate_mhealth_years)
+
+### creating df that has total mental ailment prevalence rates of all years togther. To be joined with aggregate_mhealth_years
+
+#colnames(aggregate_mhealth_years)
+
+
+#first generating the aggregate prevalence rates of all people in each study_category
+all_years_avg <- aggregate(mhealth_data$depression_number, list(mhealth_data$study_category), mean)
+all_years_avg$anxiety_avg <- aggregate(mhealth_data$anxiety_number, list(mhealth_data$study_category), mean)[2]
+all_years_avg$panic_avg <- aggregate(mhealth_data$panic_number, list(mhealth_data$study_category), mean)[2]
+
+#using the values from this all_years_avg, I will put these into aggregate_mhealth_avg_years which can be seamlessly joined with aggregate_mhealth_years
+
+
+
+aggregate_mhealth_avg_years <- data.frame( Your.current.year.of.Study = rep("all_years",length(1:8)),
+                                           study_category = c(all_years_avg[1]),
+                                           depression_number = c(all_years_avg[2]),
+                                           anxiety_number = c(all_years_avg[3]), 
+                                           panic_number = c(all_years_avg[4])
+)
+aggregate_mhealth_avg_years
+
+#renaming columns to match with the names of the aggregate_mhealth_years so we can seamlessly rbind
+aggregate_mhealth_avg_years <- aggregate_mhealth_avg_years %>% rename("study_category" = "Group.1",
+                        "depression_number" ="x" ,
+                        "anxiety_number" = "x.1" ,
+                        "panic_number" = "x.2" 
+                        )
+
+aggregate_mhealth <- rbind(aggregate_mhealth_avg_years, aggregate_mhealth_years)
+
+
+aggregate_mhealth
+#This aggregate_mhealth df has all the average depression, anxiety, and panic rates for each year of students and each study_category
+
+
+#Another option I created is a long aggregate_mhealth df that is created from pivot_longer()
+aggregate_mhealth_long <- aggregate_mhealth %>% pivot_longer(depression_number:panic_number, names_to =  "mental_health_ailment_type" , values_to = "prevalence_rate")
+
+view(aggregate_mhealth_long)
+
+#removing whitespace from Your.current.year.of.Study values to not confuse ggplot
+aggregate_mhealth_long <- as.data.frame(
+  apply(aggregate_mhealth_long,2, function(x) gsub("\\s+", "", x)))
+
+#changing data to factor and numeric respectively
+aggregate_mhealth_long[,c("Your.current.year.of.Study","study_category","mental_health_ailment_type")] <- lapply(aggregate_mhealth_long[,c("Your.current.year.of.Study","study_category","mental_health_ailment_type")] , factor)
+aggregate_mhealth_long$prevalence_rate <- as.numeric(aggregate_mhealth_long$prevalence_rate)
+
+#View(aggregate_mhealth_long)
+str(aggregate_mhealth_long)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+```{r}
+''
+#This chunk is leftover from troubleshooting, not what I am currently trying to get working
+
+#subset grouped bar plot
+ggplot(data = subset(aggregate_mhealth_long, Your.current.year.of.Study == "year1"), aes(x = factor(study_category), y = prevalence_rate, fill = mental_health_ailment_type, color = mental_health_ailment_type) ) +
+  geom_bar(stat= "identity", position = "dodge")
+#This works 
+
+
+#Making shiny plot with 1 widget
+shinyApp(
+  ui = fluidPage(
+  inputPanel(selectInput("students_year_selection",label = "students_year_selection", 
+                         choices= factor(aggregate_mhealth_long$Your.current.year.of.Study),
+                         selected= "all_years"), 
+             plotOutput("University_mental_health_ailments")
+             
+             )
+                ),
+  server = function(input, output){
+  output$University_mental_health_ailments <- renderPlot({
+    ggplot(data = subset(aggregate_mhealth_long, `Your.current.year.of.Study` == input$`students_year_selection`), 
+           aes(x = factor(study_category), y = prevalence_rate, fill = mental_health_ailment_type, color =
+                 mental_health_ailment_type)) + 
+      geom_bar(stat = "identity", color = "black", position = "dodge") 
+    }, width = 750, height = 500)
+}
+)
+#This works despite some years having only a few study_category. Once I add in another widget, the shiny plots dont display the bars correctly.
+
+'''
+```
+
+
+```{r}
+
+'''
+#This chunk is leftover from troubleshooting, not what I am currently trying to get working
+
+
+#Trying to make one with two subsetting widgets
+
+#model for how to subset on multiple columns
+aggregate_mhealth_long[(aggregate_mhealth_long$study_category == input$`study_category`) & (aggregate_mhealth_long$Your.current.year.of.Study == input$`students_year_selection`), ]
+
+#This is not the plot I intend to submit, I am just leaving this one here for now as an example to help me troubleshoot the others
+shinyApp(
+  ui = fluidPage(
+    selectInput("students_year_selection",label = "students_year_selection", 
+                choices= levels(aggregate_mhealth_long$Your.current.year.of.Study),
+                selected= "all_years"),
+    checkboxGroupInput("study_category", label = "study_category",
+                       choices = levels(aggregate_mhealth_long$study_category),
+                       selected = "psychology"),
+    plotOutput('University_mental_health_ailments')
+    ),
+  
+  server = function(input, output){
+    output$University_mental_health_ailments <- renderPlot({
+      ggplot(data = (aggregate_mhealth_long[(aggregate_mhealth_long$study_category == input$`study_category`) & (aggregate_mhealth_long$Your.current.year.of.Study == input$`students_year_selection`), ]),
+  
+           aes(x = study_category, y = prevalence_rate, fill = mental_health_ailment_type, color =
+                 mental_health_ailment_type)) + 
+        geom_bar(stat = "identity", color = "black", position = "dodge", width = .25) 
+    })
+    }
+)
+#producing warning <longer object length is not a multiple of shorter object length> when you check more study_category which I suspect to be causing the problems with the bars disappearing depending on how many choices are toggled.
+
+''
+```
+
+
+```{r}
+### Manipulating data for 3 widget subset visualization to keep vector length constant
+
+#Must take aggregate_mhealth_long and drop law and psych and drop year 4
+aggregate_mhealth_long_equal_vector_length <- aggregate_mhealth_long
+
+#deleting rows of students in year 4 and students in law or psychology major as this gives ggplot vectors of different lengths
+aggregate_mhealth_long_equal_vector_length <- aggregate_mhealth_long[!(
+  aggregate_mhealth_long$Your.current.year.of.Study == "year4" |
+    aggregate_mhealth_long$study_category == "Law" |
+    aggregate_mhealth_long$study_category == "psychology"
+  ),]
+
+#dropping unused factor levels law and psychology from new equal_vector_length df
+aggregate_mhealth_long_equal_vector_length <- droplevels(aggregate_mhealth_long_equal_vector_length)
+levels(aggregate_mhealth_long_equal_vector_length$mental_health_ailment_type)
+
+student_df <- aggregate_mhealth_long_equal_vector_length
+
+#This is the plot I plan to add to the Shiny website. This is the one I am trouble shooting and trying to get work.
+shinyApp(
+  ui = fluidPage(
+    selectInput("students_year_selection",label = "students_year_selection",
+                choices= levels(student_df$Your.current.year.of.Study),
+                selected= "all_years"),
+    checkboxGroupInput("study_category", label = "study_category",
+                       choices = levels(student_df$study_category),
+                       selected = "business"),
+    radioButtons("mental_health_ailment", label = "mental_health_ailment",
+                 choices = levels(student_df$mental_health_ailment_type),
+                 selected = "depression_number"),
+    plotOutput('University_mental_health_ailments')
+    ),
+ 
+  server = function(input, output){
+    output$University_mental_health_ailments <- renderPlot({
+     
+      sub_df = student_df %>%
+        subset(study_category %in% input$`study_category`) %>%
+        subset(mental_health_ailment_type == input$`mental_health_ailment`) %>%
+        subset(Your.current.year.of.Study== input$`students_year_selection`)
+     
+     
+      ggplot(data = sub_df,
+           aes(x = study_category, y = prevalence_rate)) +
+        geom_bar(stat = "identity", color = "black", width = .25) +
+        theme_minimal()
+    })
+    }
+)
+
+
+```
+
